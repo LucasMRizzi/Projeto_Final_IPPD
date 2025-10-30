@@ -4,12 +4,30 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>  // Header correto para clock_gettime e struct timespec
+#include <pthread.h>
+
+
+int thread_count;
 
 // Estrutura para representar um ponto no espaço D-dimensional
 typedef struct {
   int* coords;     // Vetor de coordenadas inteiras
   int cluster_id;  // ID do cluster ao qual o ponto pertence
 } Point;
+
+
+
+typedef struct {
+    Point* points;
+    Point* centroids;
+    int num_pontos;
+    int num_clusters;
+    int num_dimensoes;
+    int thread_id;
+    int thread_count;
+} ThreadArgs;
+
+
 
 // --- Funções Utilitárias ---
 
@@ -77,6 +95,13 @@ void initialize_centroids(Point* points, Point* centroids, int num_pontos, int n
   free(indices);
 }
 
+
+
+
+
+
+
+
 /**
  * @brief Fase de Atribuição: Associa cada ponto ao cluster do centroide mais próximo.
  */
@@ -95,6 +120,12 @@ void assign_points_to_clusters(Point* points, Point* centroids, int num_pontos, 
     points[i].cluster_id = best_cluster;
   }
 }
+
+
+
+
+
+
 /**
  * Maior problema
  * for triplo -> pontos * clusters * dimensoes
@@ -134,6 +165,32 @@ void update_centroids(Point* points, Point* centroids, int num_pontos, int num_c
   free(cluster_sums);
   free(cluster_counts);
 }
+
+
+
+
+
+void* thread_assign_points(void* args) {
+    ThreadArgs* targs = (ThreadArgs*) args;
+
+    // Divide o trabalho entre threads
+    int start = (targs->num_pontos / targs->thread_count) * targs->thread_id;
+    int end = (targs->thread_id == targs->thread_count - 1)
+                ? targs->num_pontos
+                : start + (targs->num_pontos / targs->thread_count);
+
+    // Chama a função original, mas só com o pedaço de pontos da thread
+    assign_points_to_clusters(&targs->points[start], targs->centroids, end - start, targs->num_clusters, targs->num_dimensoes);
+
+    pthread_exit(NULL);
+}
+
+
+
+
+
+
+
 /**
  * Ponto secundário
  * 2 fors duplos -> pontos * dimensoes, clusters * dimensoes
@@ -184,8 +241,12 @@ void print_time_and_checksum(Point* centroids, int num_clusters, int num_dimenso
 // --- Função Principal ---
 
 int main(int argc, char* argv[]) {
+
+    
+
+
   // Validação e leitura dos argumentos de linha de comando
-  if (argc != 6) {
+  if (argc != 7) {
     fprintf(stderr, "Uso: %s <arquivo_dados> <num_pontos> <num_dimensoes> <num_clusters> <num_iteracoes>\n", argv[0]);
     return EXIT_FAILURE;
   }
@@ -195,6 +256,27 @@ int main(int argc, char* argv[]) {
   const int num_dimensoes = atoi(argv[3]);
   const int num_clusters = atoi(argv[4]);
   const int num_iteracoes = atoi(argv[5]);
+
+
+
+
+    thread_count = strtol(argv[6], NULL, 10);
+    if (thread_count <= 0) {
+        fprintf(stderr, "Erro: número de threads inválido (%d)\n", thread_count);
+        return EXIT_FAILURE;
+    }
+    pthread_t *thread_handles = malloc(thread_count * sizeof(pthread_t));
+    ThreadArgs *targs = malloc(thread_count * sizeof(ThreadArgs));
+    if (!thread_handles || !targs) {
+        fprintf(stderr, "Erro: falha ao alocar memória para threads.\n");
+        return EXIT_FAILURE;
+    }
+
+
+
+
+
+
 
   if (num_pontos <= 0 || num_dimensoes <= 0 || num_clusters <= 0 || num_iteracoes <= 0 || num_clusters > num_pontos) {
     fprintf(stderr, "Erro nos parâmetros. Verifique se Numero de pontos, Numero de dimensoes, Numero de clusters,\
@@ -218,17 +300,61 @@ int main(int argc, char* argv[]) {
   read_data_from_file(filename, points, num_pontos, num_dimensoes);
   initialize_centroids(points, centroids, num_pontos, num_clusters, num_dimensoes);
 
+
+
+
+
+
+
+
+
+
   // --- Medição de Tempo do Algoritmo Principal ---
   struct timespec start, end;
   clock_gettime(CLOCK_MONOTONIC, &start);  // Inicia o cronômetro
 
   // Laço principal do K-Means (A única parte que será medida)
+  
+  /* FORK Cria as threads informadas na linha de comando */
+
   for (int iter = 0; iter < num_iteracoes; iter++) {
-    assign_points_to_clusters(points, centroids, num_pontos, num_clusters, num_dimensoes);
+    for (int i = 0; i < thread_count; i++) {
+        targs[i].points = points;
+        targs[i].centroids = centroids;
+        targs[i].num_pontos = num_pontos;
+        targs[i].num_clusters = num_clusters;
+        targs[i].num_dimensoes = num_dimensoes;
+        targs[i].thread_id = i;
+        targs[i].thread_count = thread_count;
+        if (pthread_create(&thread_handles[i], NULL, thread_assign_points, &targs[i]) != 0) {
+            fprintf(stderr, "Erro ao criar thread %d\n", i);
+            exit(EXIT_FAILURE);
+    
+        }
+    }
+
+    for (int i = 0; i < thread_count; i++) {
+        pthread_join(thread_handles[i], NULL);
+    }
+    
     update_centroids(points, centroids, num_pontos, num_clusters, num_dimensoes);
+
+    
   }
 
+    free(thread_handles);
+    free(targs);
+
   clock_gettime(CLOCK_MONOTONIC, &end);  // Para o cronômetro
+
+
+
+
+
+
+
+
+
 
   // Calcula o tempo decorrido em segundos
   double time_taken = (end.tv_sec - start.tv_sec) + 1e-9 * (end.tv_nsec - start.tv_nsec);
