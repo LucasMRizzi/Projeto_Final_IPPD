@@ -18,9 +18,9 @@ typedef struct {
  * Usa 'long long' para evitar overflow no cálculo da distância e da diferença.
  * @return A distância Euclidiana ao quadrado como um long long.
  */
-long long euclidean_dist_sq(Point* p1, Point* p2, int D) {
+long long euclidean_dist_sq(Point* p1, Point* p2, int num_dimensoes) {
   long long dist = 0;
-  for (int i = 0; i < D; i++) {
+  for (int i = 0; i < num_dimensoes; i++) {
     long long diff = (long long)p1->coords[i] - p2->coords[i];
     dist += diff * diff;
   }
@@ -32,15 +32,15 @@ long long euclidean_dist_sq(Point* p1, Point* p2, int D) {
 /**
  * @brief Lê os dados de pontos (inteiros) de um arquivo de texto.
  */
-void read_data_from_file(const char* filename, Point* points, int M, int D) {
+void read_data_from_file(const char* filename, Point* points, int num_pontos, int num_dimensoes) {
   FILE* file = fopen(filename, "r");
   if (file == NULL) {
     fprintf(stderr, "Erro: Não foi possível abrir o arquivo '%s'\n", filename);
     exit(EXIT_FAILURE);
   }
 
-  for (int i = 0; i < M; i++) {
-    for (int j = 0; j < D; j++) {
+  for (int i = 0; i < num_pontos; i++) {
+    for (int j = 0; j < num_dimensoes; j++) {
       if (fscanf(file, "%d", &points[i].coords[j]) != 1) {
         fprintf(stderr, "Erro: Arquivo de dados mal formatado ou incompleto.\n");
         fclose(file);
@@ -55,23 +55,23 @@ void read_data_from_file(const char* filename, Point* points, int M, int D) {
 /**
  * @brief Inicializa os centroides escolhendo K pontos aleatórios do dataset.
  */
-void initialize_centroids(Point* points, Point* centroids, int M, int K, int D) {
+void initialize_centroids(Point* points, Point* centroids, int num_pontos, int num_clusters, int num_dimensoes) {
   srand(42);  // Semente fixa para reprodutibilidade
 
-  int* indices = (int*)malloc(M * sizeof(int));
-  for (int i = 0; i < M; i++) {
+  int* indices = (int*)malloc(num_pontos * sizeof(int));
+  for (int i = 0; i < num_pontos; i++) {
     indices[i] = i;
   }
 
-  for (int i = 0; i < M; i++) {
-    int j = rand() % M;
+  for (int i = 0; i < num_pontos; i++) {
+    int j = rand() % num_pontos;
     int temp = indices[i];
     indices[i] = indices[j];
     indices[j] = temp;
   }
 
-  for (int i = 0; i < K; i++) {
-    memcpy(centroids[i].coords, points[indices[i]].coords, D * sizeof(int));
+  for (int i = 0; i < num_clusters; i++) {
+    memcpy(centroids[i].coords, points[indices[i]].coords, num_dimensoes * sizeof(int));
   }
 
   free(indices);
@@ -80,13 +80,13 @@ void initialize_centroids(Point* points, Point* centroids, int M, int K, int D) 
 /**
  * @brief Fase de Atribuição: Associa cada ponto ao cluster do centroide mais próximo.
  */
-void assign_points_to_clusters(Point* points, Point* centroids, int M, int K, int D) {
-  for (int i = 0; i < M; i++) {
+void assign_points_to_clusters(Point* points, Point* centroids, int num_pontos, int num_clusters, int num_dimensoes) {
+  for (int i = 0; i < num_pontos; i++) {
     long long min_dist = LLONG_MAX;
     int best_cluster = -1;
 
-    for (int j = 0; j < K; j++) {
-      long long dist = euclidean_dist_sq(&points[i], &centroids[j], D);
+    for (int j = 0; j < num_clusters; j++) {
+      long long dist = euclidean_dist_sq(&points[i], &centroids[j], num_dimensoes);
       if (dist < min_dist) {
         min_dist = dist;
         best_cluster = j;
@@ -95,28 +95,38 @@ void assign_points_to_clusters(Point* points, Point* centroids, int M, int K, in
     points[i].cluster_id = best_cluster;
   }
 }
+/**
+ * Maior problema
+ * for triplo -> pontos * clusters * dimensoes
+ * 
+ * escritas:
+ *  dist -> privada
+ *  min_dist -> privada
+ *  best_cluster -> privada
+ *  points -> pública
+ */
 
 /**
  * @brief Fase de Atualização: Recalcula a posição de cada centroide como a média
  * (usando divisão inteira) de todos os pontos atribuídos ao seu cluster.
  */
-void update_centroids(Point* points, Point* centroids, int M, int K, int D) {
-  long long* cluster_sums = (long long*)calloc(K * D, sizeof(long long));
-  int* cluster_counts = (int*)calloc(K, sizeof(int));
+void update_centroids(Point* points, Point* centroids, int num_pontos, int num_clusters, int num_dimensoes) {
+  long long* cluster_sums = (long long*)calloc(num_clusters * num_dimensoes, sizeof(long long));
+  int* cluster_counts = (int*)calloc(num_clusters, sizeof(int));
 
-  for (int i = 0; i < M; i++) {
+  for (int i = 0; i < num_pontos; i++) {
     int cluster_id = points[i].cluster_id;
     cluster_counts[cluster_id]++;
-    for (int j = 0; j < D; j++) {
-      cluster_sums[cluster_id * D + j] += points[i].coords[j];
+    for (int j = 0; j < num_dimensoes; j++) {
+      cluster_sums[cluster_id * num_dimensoes + j] += points[i].coords[j];
     }
   }
 
-  for (int i = 0; i < K; i++) {
+  for (int i = 0; i < num_clusters; i++) {
     if (cluster_counts[i] > 0) {
-      for (int j = 0; j < D; j++) {
+      for (int j = 0; j < num_dimensoes; j++) {
         // Divisão inteira para manter os centroides em coordenadas discretas
-        centroids[i].coords[j] = cluster_sums[i * D + j] / cluster_counts[i];
+        centroids[i].coords[j] = cluster_sums[i * num_dimensoes + j] / cluster_counts[i];
       }
     }
   }
@@ -124,18 +134,27 @@ void update_centroids(Point* points, Point* centroids, int M, int K, int D) {
   free(cluster_sums);
   free(cluster_counts);
 }
+/**
+ * Ponto secundário
+ * 2 fors duplos -> pontos * dimensoes, clusters * dimensoes
+ * 
+ * escritas:
+ *  cluster_counts -> pública
+ *  cluster_sums -> pública
+ *  centroids -> pública
+ */
 
 /**
  * @brief Imprime os resultados finais e o checksum (como long long).
  */
-void print_results(Point* centroids, int K, int D) {
+void print_results(Point* centroids, int num_clusters, int num_dimensoes) {
   printf("--- Centroides Finais ---\n");
   long long checksum = 0;
-  for (int i = 0; i < K; i++) {
+  for (int i = 0; i < num_clusters; i++) {
     printf("Centroide %d: [", i);
-    for (int j = 0; j < D; j++) {
+    for (int j = 0; j < num_dimensoes; j++) {
       printf("%d", centroids[i].coords[j]);
-      if (j < D - 1) printf(", ");
+      if (j < num_dimensoes - 1) printf(", ");
       checksum += centroids[i].coords[j];
     }
     printf("]\n");
@@ -150,10 +169,10 @@ void print_results(Point* centroids, int K, int D) {
  * Linha 1: Tempo de execução em segundos (double)
  * Linha 2: Checksum final (long long)
  */
-void print_time_and_checksum(Point* centroids, int K, int D, double exec_time) {
+void print_time_and_checksum(Point* centroids, int num_clusters, int num_dimensoes, double exec_time) {
   long long checksum = 0;
-  for (int i = 0; i < K; i++) {
-    for (int j = 0; j < D; j++) {
+  for (int i = 0; i < num_clusters; i++) {
+    for (int j = 0; j < num_dimensoes; j++) {
       checksum += centroids[i].coords[j];
     }
   }
@@ -167,45 +186,46 @@ void print_time_and_checksum(Point* centroids, int K, int D, double exec_time) {
 int main(int argc, char* argv[]) {
   // Validação e leitura dos argumentos de linha de comando
   if (argc != 6) {
-    fprintf(stderr, "Uso: %s <arquivo_dados> <M_pontos> <D_dimensoes> <K_clusters> <I_iteracoes>\n", argv[0]);
+    fprintf(stderr, "Uso: %s <arquivo_dados> <num_pontos> <num_dimensoes> <num_clusters> <num_iteracoes>\n", argv[0]);
     return EXIT_FAILURE;
   }
 
-  const char* filename = argv[1];  // Nome do arquivo de dados
-  const int M = atoi(argv[2]);     // Número de pontos
-  const int D = atoi(argv[3]);     // Número de dimensões
-  const int K = atoi(argv[4]);     // Número de clusters
-  const int I = atoi(argv[5]);     // Número de iterações
+  const char* filename = argv[1];
+  const int num_pontos = atoi(argv[2]);
+  const int num_dimensoes = atoi(argv[3]);
+  const int num_clusters = atoi(argv[4]);
+  const int num_iteracoes = atoi(argv[5]);
 
-  if (M <= 0 || D <= 0 || K <= 0 || I <= 0 || K > M) {
-    fprintf(stderr, "Erro nos parâmetros. Verifique se M,D,K,I > 0 e K <= M.\n");
+  if (num_pontos <= 0 || num_dimensoes <= 0 || num_clusters <= 0 || num_iteracoes <= 0 || num_clusters > num_pontos) {
+    fprintf(stderr, "Erro nos parâmetros. Verifique se Numero de pontos, Numero de dimensoes, Numero de clusters,\
+                        Numero de Iteracoes > 0 e Numero de clusters <= Numero de pontos.\n");
     return EXIT_FAILURE;
   }
 
   // --- Alocação de Memória ---
-  int* all_coords = (int*)malloc((M + K) * D * sizeof(int));
-  Point* points = (Point*)malloc(M * sizeof(Point));
-  Point* centroids = (Point*)malloc(K * sizeof(Point));
+  int* all_coords = (int*)malloc((num_pontos + num_clusters) * num_dimensoes * sizeof(int));
+  Point* points = (Point*)malloc(num_pontos * sizeof(Point));
+  Point* centroids = (Point*)malloc(num_clusters * sizeof(Point));
   // ... (verificação de alocação) ...
-  for (int i = 0; i < M; i++) {
-    points[i].coords = &all_coords[i * D];
+  for (int i = 0; i < num_pontos; i++) {
+    points[i].coords = &all_coords[i * num_dimensoes];
   }
-  for (int i = 0; i < K; i++) {
-    centroids[i].coords = &all_coords[(M + i) * D];
+  for (int i = 0; i < num_clusters; i++) {
+    centroids[i].coords = &all_coords[(num_pontos + i) * num_dimensoes];
   }
 
   // --- Preparação (Fora da medição de tempo) ---
-  read_data_from_file(filename, points, M, D);
-  initialize_centroids(points, centroids, M, K, D);
+  read_data_from_file(filename, points, num_pontos, num_dimensoes);
+  initialize_centroids(points, centroids, num_pontos, num_clusters, num_dimensoes);
 
   // --- Medição de Tempo do Algoritmo Principal ---
   struct timespec start, end;
   clock_gettime(CLOCK_MONOTONIC, &start);  // Inicia o cronômetro
 
   // Laço principal do K-Means (A única parte que será medida)
-  for (int iter = 0; iter < I; iter++) {
-    assign_points_to_clusters(points, centroids, M, K, D);
-    update_centroids(points, centroids, M, K, D);
+  for (int iter = 0; iter < num_iteracoes; iter++) {
+    assign_points_to_clusters(points, centroids, num_pontos, num_clusters, num_dimensoes);
+    update_centroids(points, centroids, num_pontos, num_clusters, num_dimensoes);
   }
 
   clock_gettime(CLOCK_MONOTONIC, &end);  // Para o cronômetro
@@ -214,7 +234,7 @@ int main(int argc, char* argv[]) {
   double time_taken = (end.tv_sec - start.tv_sec) + 1e-9 * (end.tv_nsec - start.tv_nsec);
 
   // --- Apresentação dos Resultados ---
-  print_time_and_checksum(centroids, K, D, time_taken);
+  print_time_and_checksum(centroids, num_clusters, num_dimensoes, time_taken);
 
   // --- Limpeza ---
   free(all_coords);
