@@ -5,11 +5,14 @@
 #include <string.h>
 #include <time.h>  // Header correto para clock_gettime e struct timespec
 
+#include <omp.h>
+
 // Estrutura para representar um ponto no espaço D-dimensional
 typedef struct {
   int* coords;     // Vetor de coordenadas inteiras
   int cluster_id;  // ID do cluster ao qual o ponto pertence
 } Point;
+
 
 // --- Funções Utilitárias ---
 
@@ -81,6 +84,7 @@ void initialize_centroids(Point* points, Point* centroids, int num_pontos, int n
  * @brief Fase de Atribuição: Associa cada ponto ao cluster do centroide mais próximo.
  */
 void assign_points_to_clusters(Point* points, Point* centroids, int num_pontos, int num_clusters, int num_dimensoes) {
+  #pragma omp parallel for
   for (int i = 0; i < num_pontos; i++) {
     long long min_dist = LLONG_MAX;
     int best_cluster = -1;
@@ -222,11 +226,13 @@ int main(int argc, char* argv[]) {
   struct timespec start, end;
   clock_gettime(CLOCK_MONOTONIC, &start);  // Inicia o cronômetro
 
+
   // Laço principal do K-Means (A única parte que será medida)
   for (int iter = 0; iter < num_iteracoes; iter++) {
     assign_points_to_clusters(points, centroids, num_pontos, num_clusters, num_dimensoes);
     update_centroids(points, centroids, num_pontos, num_clusters, num_dimensoes);
   }
+
 
   clock_gettime(CLOCK_MONOTONIC, &end);  // Para o cronômetro
 
