@@ -29,6 +29,18 @@ typedef struct {
 
 
 
+typedef struct {
+    Point* p;
+    Point* c;
+    int start_dim;
+    int end_dim;
+    long long partial_sum;
+} DistArgs;
+
+
+
+
+
 // --- Funções Utilitárias ---
 
 /**
@@ -36,14 +48,16 @@ typedef struct {
  * Usa 'long long' para evitar overflow no cálculo da distância e da diferença.
  * @return A distância Euclidiana ao quadrado como um long long.
  */
-long long euclidean_dist_sq(Point* p1, Point* p2, int num_dimensoes) {
-  long long dist = 0;
-  for (int i = 0; i < num_dimensoes; i++) {
-    long long diff = (long long)p1->coords[i] - p2->coords[i];
-    dist += diff * diff;
-  }
-  return dist;
-}
+  long long euclidean_dist_sq(Point* p1, Point* p2, int num_dimensoes);
+
+
+
+
+
+
+
+
+
 
 // --- Funções Principais do K-Means ---
 
@@ -169,6 +183,19 @@ void update_centroids(Point* points, Point* centroids, int num_pontos, int num_c
 
 
 
+void* partial_distance(void* a) {
+    DistArgs* da = (DistArgs*) a;
+    long long sum = 0;
+    for (int d = da->start_dim; d < da->end_dim; ++d) {
+        long long diff = (long long)da->p->coords[d] - (long long)da->c->coords[d];
+        sum += diff * diff;
+    }
+    da->partial_sum = sum;
+    return NULL;
+}
+
+
+
 
 void* thread_assign_points(void* args) {
     ThreadArgs* targs = (ThreadArgs*) args;
@@ -247,7 +274,7 @@ int main(int argc, char* argv[]) {
 
   // Validação e leitura dos argumentos de linha de comando
   if (argc != 7) {
-    fprintf(stderr, "Uso: %s <arquivo_dados> <num_pontos> <num_dimensoes> <num_clusters> <num_iteracoes>\n", argv[0]);
+    fprintf(stderr, "Uso: %s <arquivo_dados> <num_pontos> <num_dimensoes> <num_clusters> <num_iteracoes> <num_threads>\n", argv[0]);
     return EXIT_FAILURE;
   }
 
@@ -368,4 +395,53 @@ int main(int argc, char* argv[]) {
   free(centroids);
 
   return EXIT_SUCCESS;
+}
+
+
+long long euclidean_dist_sq(Point* p1, Point* p2, int num_dimensoes) {
+
+    // Aloca dinamicamente (mais seguro que VLA sem checagem)
+    pthread_t *threads = malloc(thread_count * sizeof(pthread_t));
+    DistArgs *args = malloc(thread_count * sizeof(DistArgs));
+    if (!threads || !args) {
+        perror("malloc");
+        exit(EXIT_FAILURE);
+    }
+
+    int base = num_dimensoes / thread_count;
+    int rem = num_dimensoes % thread_count;
+
+    int cur = 0;
+    for (int t = 0; t < thread_count; t++) {
+        int chunk = base + (t < rem ? 1 : 0); // distribui o resto
+        args[t].p = p1;
+        args[t].c = p2;
+        args[t].start_dim = cur;
+        args[t].end_dim = cur + chunk;
+        args[t].partial_sum = 0;
+        cur += chunk;
+
+        if (chunk > 0) {
+            if (pthread_create(&threads[t], NULL, partial_distance, &args[t]) != 0) {
+                perror("pthread_create");
+                // fallback: faça o trabalho na thread principal
+                partial_distance(&args[t]);
+                // E marque thread inválida para join
+                threads[t] = 0;
+            }
+        } else {
+            // não cria thread se não há trabalho
+            threads[t] = 0;
+        }
+    }
+
+    long long total = 0;
+    for (int t = 0; t < thread_count; t++) {
+        if (threads[t] != 0) pthread_join(threads[t], NULL);
+        total += args[t].partial_sum;
+    }
+
+    free(threads);
+    free(args);
+    return total;
 }
