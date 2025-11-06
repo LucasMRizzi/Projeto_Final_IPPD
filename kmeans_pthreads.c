@@ -121,11 +121,6 @@ void assign_points_to_clusters(Point* points, Point* centroids, int num_pontos, 
   }
 }
 
-
-
-
-
-
 /**
  * Maior problema
  * for triplo -> pontos * clusters * dimensoes
@@ -141,32 +136,89 @@ void assign_points_to_clusters(Point* points, Point* centroids, int num_pontos, 
  * @brief Fase de Atualização: Recalcula a posição de cada centroide como a média
  * (usando divisão inteira) de todos os pontos atribuídos ao seu cluster.
  */
-void update_centroids(Point* points, Point* centroids, int num_pontos, int num_clusters, int num_dimensoes) {
-  long long* cluster_sums = (long long*)calloc(num_clusters * num_dimensoes, sizeof(long long));
-  int* cluster_counts = (int*)calloc(num_clusters, sizeof(int));
+typedef struct {
+    Point* points;
+    int num_pontos;
+    int num_clusters;
+    int num_dimensoes;
+    int thread_id;
+    int thread_count;
+    long long* local_sums;
+    int* local_counts;
+} ThreadArgsUpdate;
 
-  for (int i = 0; i < num_pontos; i++) {
-    int cluster_id = points[i].cluster_id;
-    cluster_counts[cluster_id]++;
-    for (int j = 0; j < num_dimensoes; j++) {
-      cluster_sums[cluster_id * num_dimensoes + j] += points[i].coords[j];
+void* thread_accumulate(void* args) {
+    ThreadArgsUpdate* targs = (ThreadArgsUpdate*) args;
+    int start = (targs->num_pontos / targs->thread_count) * targs->thread_id;
+    int end = (targs->thread_id == targs->thread_count - 1)
+                ? targs->num_pontos
+                : start + (targs->num_pontos / targs->thread_count);
+
+    for (int i = start; i < end; i++) {
+        int cluster_id = targs->points[i].cluster_id;
+        targs->local_counts[cluster_id]++;
+        for (int j = 0; j < targs->num_dimensoes; j++) {
+            targs->local_sums[cluster_id * targs->num_dimensoes + j] += targs->points[i].coords[j];
+        }
     }
-  }
-
-  for (int i = 0; i < num_clusters; i++) {
-    if (cluster_counts[i] > 0) {
-      for (int j = 0; j < num_dimensoes; j++) {
-        // Divisão inteira para manter os centroides em coordenadas discretas
-        centroids[i].coords[j] = cluster_sums[i * num_dimensoes + j] / cluster_counts[i];
-      }
-    }
-  }
-
-  free(cluster_sums);
-  free(cluster_counts);
+    
+    pthread_exit(NULL);
 }
 
+void update_centroids(Point* points, Point* centroids, int num_pontos, 
+                      int num_clusters, int num_dimensoes, int thread_count) {
+    
+    long long* cluster_sums = (long long*)calloc(num_clusters * num_dimensoes, sizeof(long long));
+    int* cluster_counts = (int*)calloc(num_clusters, sizeof(int));
+    pthread_t* thread_handles = malloc(thread_count * sizeof(pthread_t));
+    ThreadArgsUpdate* targs = malloc(thread_count * sizeof(ThreadArgsUpdate));
+    
+    for (int i = 0; i < thread_count; i++) {
+        targs[i].local_sums = (long long*)calloc(num_clusters * num_dimensoes, sizeof(long long));
+        targs[i].local_counts = (int*)calloc(num_clusters, sizeof(int));
+        
+        targs[i].points = points;
+        targs[i].num_pontos = num_pontos;
+        targs[i].num_clusters = num_clusters;
+        targs[i].num_dimensoes = num_dimensoes;
+        targs[i].thread_id = i;
+        targs[i].thread_count = thread_count;
+        
+        if (pthread_create(&thread_handles[i], NULL, thread_accumulate, &targs[i]) != 0) {
+            fprintf(stderr, "Erro ao criar thread %d para update_centroids\n", i);
+            exit(EXIT_FAILURE);
+        }
+    }
+  
+    for (int i = 0; i < thread_count; i++) {
+        pthread_join(thread_handles[i], NULL);
+    }
+    
+    for (int t = 0; t < thread_count; t++) {
+        for (int i = 0; i < num_clusters; i++) {
+            cluster_counts[i] += targs[t].local_counts[i];
+            for (int j = 0; j < num_dimensoes; j++) {
+                cluster_sums[i * num_dimensoes + j] += targs[t].local_sums[i * num_dimensoes + j];
+            }
+        }
 
+        free(targs[t].local_sums);
+        free(targs[t].local_counts);
+    }
+    
+    for (int i = 0; i < num_clusters; i++) {
+        if (cluster_counts[i] > 0) {
+            for (int j = 0; j < num_dimensoes; j++) {
+                centroids[i].coords[j] = cluster_sums[i * num_dimensoes + j] / cluster_counts[i];
+            }
+        }
+    }
+  
+    free(cluster_sums);
+    free(cluster_counts);
+    free(thread_handles);
+    free(targs);
+}
 
 
 
@@ -247,7 +299,7 @@ int main(int argc, char* argv[]) {
 
   // Validação e leitura dos argumentos de linha de comando
   if (argc != 7) {
-    fprintf(stderr, "Uso: %s <arquivo_dados> <num_pontos> <num_dimensoes> <num_clusters> <num_iteracoes>\n", argv[0]);
+    fprintf(stderr, "Uso: %s <arquivo_dados> <num_pontos> <num_dimensoes> <num_clusters> <num_iteracoes> <num_threads>\n", argv[0]);
     return EXIT_FAILURE;
   }
 
@@ -337,7 +389,7 @@ int main(int argc, char* argv[]) {
         pthread_join(thread_handles[i], NULL);
     }
     
-    update_centroids(points, centroids, num_pontos, num_clusters, num_dimensoes);
+    update_centroids(points, centroids, num_pontos, num_clusters, num_dimensoes, thread_count);
 
     
   }
