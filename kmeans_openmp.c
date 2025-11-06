@@ -84,7 +84,6 @@ void initialize_centroids(Point* points, Point* centroids, int num_pontos, int n
  * @brief Fase de Atribuição: Associa cada ponto ao cluster do centroide mais próximo.
  */
 void assign_points_to_clusters(Point* points, Point* centroids, int num_pontos, int num_clusters, int num_dimensoes) {
-  #pragma omp parallel for
   for (int i = 0; i < num_pontos; i++) {
     long long min_dist = LLONG_MAX;
     int best_cluster = -1;
@@ -118,10 +117,13 @@ void update_centroids(Point* points, Point* centroids, int num_pontos, int num_c
   long long* cluster_sums = (long long*)calloc(num_clusters * num_dimensoes, sizeof(long long));
   int* cluster_counts = (int*)calloc(num_clusters, sizeof(int));
 
+  #pragma omp parallel for
   for (int i = 0; i < num_pontos; i++) {
     int cluster_id = points[i].cluster_id;
+    #pragma omp atomic
     cluster_counts[cluster_id]++;
     for (int j = 0; j < num_dimensoes; j++) {
+      #pragma omp atomic
       cluster_sums[cluster_id * num_dimensoes + j] += points[i].coords[j];
     }
   }
