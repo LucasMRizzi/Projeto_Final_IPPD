@@ -18,7 +18,7 @@ Verificação de condições de corrida;
     int thread_id;
     int thread_count; e recebe o nome de ThreadArgs.
     Além disso foi feita uma função de passagem entre o fork e a função desejada (assign_points_to_clusters), sendo a função void* thread_assign_points(void* args), que divide o trabalho e chama a função principal.
-    2 - Testes: Comparação entre sequencial e paralelizado
+    2 - Testes: Comparação entre sequencial e paralelizado (realizado com dataset.txt, 1000000, 10, 100, 50, 4)
     Dia 1:
         SEQUENCIAL          PARALELIZADO        CORRETO         SPEEDUP
         45.190313           17.917564           Sim             2,522124
@@ -31,3 +31,13 @@ Verificação de condições de corrida;
         24.104122           12.548625           Sim             1,920857
         23.930558           9.109715            Sim             2,626927
     
+
+***Paralelização na função euclidean_dist_sq***
+    1 - Foi criado um novo struct para viabilizar a passagem de parâmetros, Struct contém os elementos:
+    Point* p;
+    Point* c;
+    int start_dim;
+    int end_dim;
+    long long partial_sum; e recebe o nome de  DistArgs
+    Além disso foi feita uma função de passagem entre o fork e a função desejada (euclidean_dist_sq), sendo a função void* partial_distance(void* a), que divide o trabalho e chama a função principal.
+    2 - Teste: ao tentar realizar o teste com o dataset.txt a execução demorou muito (e foi concelada antes de ser realizada completamente), pode-se concluir, então, que a paralelização dessa forma da função euclidean_dist_sq não é otimizada, tornando a execução mais lenta que a original (sequencial).
