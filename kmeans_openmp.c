@@ -117,7 +117,8 @@ void update_centroids(Point* points, Point* centroids, int num_pontos, int num_c
   long long* cluster_sums = (long long*)calloc(num_clusters * num_dimensoes, sizeof(long long));
   int* cluster_counts = (int*)calloc(num_clusters, sizeof(int));
 
-  #pragma omp parallel for
+  #pragma omp parallel 
+  #pragma omp for
   for (int i = 0; i < num_pontos; i++) {
     int cluster_id = points[i].cluster_id;
     #pragma omp atomic
@@ -128,6 +129,7 @@ void update_centroids(Point* points, Point* centroids, int num_pontos, int num_c
     }
   }
 
+  #pragma omp for
   for (int i = 0; i < num_clusters; i++) {
     if (cluster_counts[i] > 0) {
       for (int j = 0; j < num_dimensoes; j++) {
