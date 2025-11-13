@@ -6,6 +6,12 @@ Edição do código sequêncial para visualização do problema;
 Identificação de funções paralelizáveis;
 Verificação de condições de corrida;
 
+## Observação importante
+    Cálculo do tempo das duas funções não paralelizadas ('assign_points_to_clusters' e 'update_centroids'):
+        assign_points_to_clusters - 99%
+        update_centroids - menor que 1%
+    Conclusão: Não vale a pena paralelizar a função update_centroids
+
 **OpenMP**
 
 ### 1 - Teste de paralelização na função 'assign_points_to_clusters'
@@ -64,8 +70,4 @@ Teste realizado com paralelização básica nas duas funções.
         OpenMP (4 threads) -> 9.097608 ms - 5002634 || SpeedUp: 3.02x
         OpenMP (8 threads) -> 5.823352 ms - 5002634 || SpeedUp: 4.72x
 
-## Observação importante
-    Cálculo do tempo das duas funções não paralelizadas ('assign_points_to_clusters' e 'update_centroids'):
-        assign_points_to_clusters - 99%
-        update_centroids - menor que 1%
-    Conclusão: Não vale a pena paralelizar a função update_centroids
+
