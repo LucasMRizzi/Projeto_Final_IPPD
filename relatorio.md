@@ -49,3 +49,23 @@ Verificação de condições de corrida;
         31.940996           6.993517           Sim             4,567229
         31.975969           7.058396           Sim             4,530203
         31.957209           7.040715           Sim             4,538915
+
+
+1 - Foi criado o struct ThreadArgs para permitir a passagem de parâmetros às threads, contendo os campos:
+Point* points; 
+Point* centroids; 
+int num_pontos; 
+int num_clusters; 
+int num_dimensoes; 
+int thread_id; 
+int thread_count; 
+int start; 
+int end;
+Além disso foi implementada a função void* thread_assign_points(void* args), responsável por processar um subconjunto dos pontos. Cada thread calcula o centróide mais próximo apenas para os pontos dentro do seu intervalo (start a end), evitando sobreposição de dados e condições de corrida. No main, a criação e junção das threads (pthread_create e pthread_join) foram adicionadas em torno da fase de atribuição, substituindo o loop sequencial original. Conclusão: Os resultados obtidos não foram significantes em relação aos anteriores
+
+    2 - Testes: Comparação entre sequencial e paralelizado (realizado com dataset.txt, 1000000, 10, 100, 50, 8)
+
+        SEQUENCIAL          PARALELIZADO       CORRETO         SPEEDUP
+        31.318116           6.899724           Sim             4,539038
+        31.240253           6.978011           Sim             4,476956
+        31.381386           6.962912           Sim             4,506934
