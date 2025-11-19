@@ -1,6 +1,16 @@
 # Relatório
 
-### Primeiros passos
+### Grupo
+
+- Daniel Urbani
+- Kael Bradbury Franco Silva
+- Lucas Moreira Rizzi
+- Pedro Novaes Neto
+- Rafael Moretti Kusunoki
+- Vinicius de Paula Chakur Farah
+
+
+## Primeiros passos
 - Edição do código sequêncial para visualização do problema;
 - Identificação de funções paralelizáveis;
 - Verificação de condições de corrida;
