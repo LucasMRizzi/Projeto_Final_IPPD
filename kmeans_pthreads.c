@@ -5,6 +5,9 @@
 #include <string.h>
 #include <time.h>  // Header correto para clock_gettime e struct timespec
 #include <pthread.h>
+#include <unistd.h>
+
+
 
 
 int thread_count;
@@ -298,8 +301,8 @@ int main(int argc, char* argv[]) {
 
 
   // Validação e leitura dos argumentos de linha de comando
-  if (argc != 7) {
-    fprintf(stderr, "Uso: %s <arquivo_dados> <num_pontos> <num_dimensoes> <num_clusters> <num_iteracoes> <num_threads>\n", argv[0]);
+  if (argc != 6) {
+    fprintf(stderr, "Uso: %s <arquivo_dados> <num_pontos> <num_dimensoes> <num_clusters> <num_iteracoes>\n", argv[0]);
     return EXIT_FAILURE;
   }
 
@@ -309,14 +312,9 @@ int main(int argc, char* argv[]) {
   const int num_clusters = atoi(argv[4]);
   const int num_iteracoes = atoi(argv[5]);
 
+  int thread_count = sysconf(_SC_NPROCESSORS_ONLN);
 
 
-
-    thread_count = strtol(argv[6], NULL, 10);
-    if (thread_count <= 0) {
-        fprintf(stderr, "Erro: número de threads inválido (%d)\n", thread_count);
-        return EXIT_FAILURE;
-    }
     pthread_t *thread_handles = malloc(thread_count * sizeof(pthread_t));
     ThreadArgs *targs = malloc(thread_count * sizeof(ThreadArgs));
     if (!thread_handles || !targs) {
